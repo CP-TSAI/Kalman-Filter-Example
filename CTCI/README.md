@@ -35,7 +35,7 @@ int main() {
 
 Q: what if we change the above code to the following, what's the result?
 ```
-Person * p = new Student();
+Person* p = new Student();
 p->aboutMe();
 ```
 
@@ -46,7 +46,7 @@ A: The result is **I am a person.**
 class Person {
 	...
 public:
-	**virtual** void aboutMe() { cout « "I am a person."; }
+	virtual void aboutMe() { cout « "I am a person."; }
 };
 
 ```
@@ -54,28 +54,34 @@ public:
 **注：將function定義為virtual, 就是將定義留給繼承他的class決定**
 
 Q: what if we don't want to implement the class in parent class?  
-A: Make the parent class as a **abstract class**, and define the function as a pure virtual function.  
+A: Make the parent class as a **abstract class**, and define the function as a **pure virtual function**.  
 ```
 class Person {
 	...
 public:
 	virtual void aboutMe() { cout « "I am a person."; }
-	<span style="color:blue">virtual bool addCourse(string s) = 0;</span>
+	virtual bool addCourse(string s) = 0;
 };
 
 class Student : public Person { 
 public:
 	void aboutMe() {cout << "I am a student. "}
+	bool addCourse(string s) {
+		cout << "addCourse " << s << endl;
+		return true;
+	}
+
 };
 
 int main() {
-	Student * p = new Student();
+	Person * p = new Student();
 	p->aboutMe(); // prints "I am a student."
-	delete p; // Important! Make sure to delete allocated memory.
-	return 0;
+	p->addCourse("history");
+	delete p;
 }
-
 ```
+**注：將function定義為pure virtual function, 就是在後面加"= 0", 並使之成為 **abstract class** 之後就無法利用該parent class 來建立object了**
+
 
 
 
