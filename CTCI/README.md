@@ -83,6 +83,65 @@ int main() {
 **注：將function定義為pure virtual function, 就是在後面加"= 0", 並使之成為 **abstract class** 之後就無法利用該parent class 來建立object了**
 
 
+- Virtual Destructor
+
+Q: Let's take a look at the naive solution, what's the problem?
+
+```
+class Person {
+public:
+	~Person() { cout << "Deleting a person" << endl; }
+}
+
+class Student : public Person {
+public:
+	~Student() {cout << "Deleting a student" << endl;}
+}
+
+int main() {
+	Person* p = new Student();
+	delete p; // print "Deleting a person"
+}
+```
+
+A:  
+(1) Since p is a **Person**, the destructor of **Person** is called.  But the memory for **Student** is not cleaned up.  
+(2) To fix it, the destructor of **Person** needs to be **virtual**.
+
+```
+class Person {
+public:
+	virtual ~Person() { cout << "Deleting a person" << endl; }
+}
+
+class Student : public Person {
+public:
+	~Student() {cout << "Deleting a student" << endl;}
+}
+
+int main() {
+	Person* p = new Student();
+	delete p;
+}
+
+the result would be:  
+Deleting a student  
+Deleting a person
+```
+
+
+- Pointers and References
+
+Q: What's the difference between them?  
+A:  
+(1) **Pointer**: holds the address of a variable, and can be used to perform any operation that can be directly done on the variable, ex: access and modify it. The size of pointer is 32bits/64bits (depending on the machine).  
+(2) **Reference**: an alias for a pre-existing object, and it does not have memory of its own. 
+(3) Pointer can be null, reference can't.  
+(4) Pointer can be re-assign, reference can't.  
+
+
+
+
 
 
 
