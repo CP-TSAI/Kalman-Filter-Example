@@ -151,6 +151,48 @@ A:
 
 - Questions
 
+
+(2) Implement a function to reverse a string  
+```
+#include <iostream>
+using namespace std;
+
+string reverse_str(string str){
+    int head = 0;
+    int end = str.size() - 1;
+    while(head < end){
+        char tmp = str[end];
+        str[end] = str[head];
+        str[head] = tmp;
+        head++;
+        end--;
+    }
+    return str;
+}
+
+
+int main(){
+    string input = "abcd";
+    string rev_input = reverse_str(input);
+    cout << "rev_input = " << rev_input << endl;     
+    return 0;
+}
+```
+
+
+(3) Compare **hash-table** and **STL map**. If the data is small, which data structure can be used instead of hash-table.  
+ - **Hash-table**:  
+ - key-> idx = hash-function(key) -> linked-list[idx] = value  
+ - insert and look up is O(1)  
+ - Need to handle **collision** by **chaining** (creating a linked-list of all values whose keys map to a particular index).  
+ - In short, the element in the linked-list need to hold: {the original key, value}. A good hash-function is needed to ensure the keys are well-distributed. The collision slows the look-up process.  
+ - **STL map**:  
+ - the {key, value} pair is inserted to a BST based on the keys.  
+ - No need to handle collision  
+ - Balanced tree, so the insert and lookup is O(logN).  
+ - **Data is small**: if it's the case, then STL map (time: O(logN)) is a good choice, since N is small.  
+
+
 (4) **How do virtual function works in C++?**  
  - vtable (used to resolve the address of the function when virtual function is called.)
  - it stores the address of the virtual functions of the class.  
@@ -187,8 +229,30 @@ void main() {
  - C++ non-virtual function calls are resolved at **compile time** with **static binding**, while virtual function calls are resolved at **run time** with **dynamic binding**.  
 
 
+(5) What's the difference between **shallow copy** and **deep copy**?  
+ - shallow copy: copy all member values from one object to another.  
+ - deep copy: in addition to copy all member values, it also copies any **pointer objects**.  
+ - shallow copy may cause runtime errors, especially with the **creation and deletion of objects**.  
+ - We should rarely use shallow copy. 
+```
+struct Test {
+	char* ptr;
+};
 
+void shallow_copy(Test& src, Test& dest) {
+	dest.ptr = src.ptr;
+}
 
+void deep_copy(Test& src, Test& dest) {
+	dest.ptr = (char*)malloc(strlen(stc.ptr) + 1);
+	strcpy(dest.ptr, src.ptr);
+}
+
+```
+
+(7) Why does a **destructor in base class** need to be declared **virtual**?  
+ - See the tutorial above. 
+ - In short, we want to make sure that the destructor for the most derived class is called. 
 
 
 
