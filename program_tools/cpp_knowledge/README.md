@@ -2,17 +2,19 @@
 
 - reference: https://www.learncpp.com/
 
+---
+
 #### 6.9 Dynamic memory allocation with "new" and "delete"
 
-- C++ supports three basic types of memory allocation:  
+C++ supports three basic types of memory allocation:  
 
-**Static memory allocation** happens for static and global variables. 
+(1) <span style="color:blue">**Static memory allocation**</span> happens for static and global variables. 
 Memory for these types of variables is allocated once when your program is run and persists throughout the life of your program.
 
-**Automatic memory allocation** happens for function parameters and local variables. Memory for these types of variables is allocated when the relevant block is entered, and freed when the block is exited, as many times as necessary.
+(2) **Automatic memory allocation** happens for function parameters and local variables. Memory for these types of variables is allocated when the relevant block is entered, and freed when the block is exited, as many times as necessary.
 
 
-**Dynamic memory allocation** is the topic of this article.
+(3) **Dynamic memory allocation** is the topic of this article.
 Both static and automatic allocation have two things in common:
 	- The size of the variable / array must be known at compile time.
 	- Memory allocation and deallocation happens automatically (when the variable is instantiated / destroyed).
