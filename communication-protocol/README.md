@@ -140,6 +140,7 @@ Like all devices, UNIX provides access to serial ports via `device files`. To ac
 ---
 
 **Serial Port Files**
+
 Each serial port on a UNIX system has one or more device files (files in the `/dev` directory) associated with it:
 
 [plot]
@@ -149,19 +150,537 @@ Each serial port on a UNIX system has one or more device files (files in the `/d
 
 **Opening a Serial Port**
 
-Since a serial port is a file, the open(2) function is used to access it. The one hitch with UNIX is that device files are usually not accessable by normal users. Workarounds include changing the access permissions to the file(s) in question, running your program as the super-user (root), or making your program set-userid so that it runs as the owner of the device file.
+Since a serial port is a file, the `open(2)` function is used to access it. 
+The one hitch with UNIX is that device files are usually not accessable by normal users. Workarounds include changing the access permissions to the file(s) in question, running your program as the super-user (root), or making your program set-userid so that it runs as the owner of the device file.
 
 For now we'll assume that the file is accessable by all users. The code to open serial port 1 on an sgi® workstation running IRIX is:
 
+```
+Listing 1 - Opening a serial port.
+
+#include <stdio.h>   /* Standard input/output definitions */
+#include <string.h>  /* String function definitions */
+#include <unistd.h>  /* UNIX standard function definitions */
+#include <fcntl.h>   /* File control definitions */
+#include <errno.h>   /* Error number definitions */
+#include <termios.h> /* POSIX terminal control definitions */
+
+/*
+ * 'open_port()' - Open serial port 1.
+ *
+ * Returns the file descriptor on success or -1 on error.
+ */
+
+int open_port(void) {
+  int fd; /* File descriptor for the port */
+
+  fd = open("/dev/ttyf1", O_RDWR | O_NOCTTY | O_NDELAY);
+  if (fd == -1)
+  {
+   /*
+    * Could not open the port.
+    */
+
+    perror("open_port: Unable to open /dev/ttyf1 - ");
+  }
+  else
+    fcntl(fd, F_SETFL, 0);
+
+  return (fd);
+}
+```
+
+Other systems would require the corresponding device file name, but otherwise the code is the same.
+
+---
+
+**Open Options**
+
+You'll notice that when we opened the device file we used two other flags along with the read+write mode:
+
+`fd = open("/dev/ttyf1", O_RDWR | O_NOCTTY | O_NDELAY);`
+
+The `O_NOCTTY` flag tells UNIX that this program doesn't want to be the `"controlling terminal"` for that port. 
+If you don't specify this then any input (such as keyboard abort signals and so forth) will affect your process. Programs like getty(1M/8) use this feature when starting the login process, but normally a user program does not want this behavior.
+
+The `O_NDELAY` flag tells UNIX that this program doesn't care what state the DCD signal line is in - whether the other end of the port is up and running. If you do not specify this flag, your process will be put to sleep until the DCD signal line is the space voltage.
 
 
+---
+
+**Writing Data to the Port**
+
+Writing data to the port is easy - just use the `write(2)` system call to send data to it:
+
+```
+n = write(fd, "ATZ\r", 4);
+if (n < 0)
+  fputs("write() of 4 bytes failed!\n", stderr);
+```
+
+The write function returns the number of bytes sent or -1 if an error occurred. Usually the only error you'll run into is EIO when a MODEM or data link drops the Data Carrier Detect (DCD) line. This condition will persist until you close the port.
 
 
+---
+
+**Reading Data from the Port**
+
+Reading data from a port is a little trickier. When you operate the port in `raw data mode`, each `read(2)` system call will return however many characters are actually available in the serial input buffers. 
+
+If no characters are available, the call will block (wait) until characters come in, an interval timer expires, or an error occurs. The `read` function can be made to return immediately by doing the following:
+
+```
+fcntl(fd, F_SETFL, FNDELAY);
+```
+
+The `FNDELAY` option causes the `read` function to return `0` if no characters are available on the port. 
+To restore normal (blocking) behavior, call fcntl() without the `FNDELAY` option:
+
+```
+fcntl(fd, F_SETFL, 0);
+```
+
+This is also used after opening a serial port with the O_NDELAY option.
+
+---
+
+**Closing a Serial Port**
+
+To close the serial port, just use the close system call:
+
+```
+close(fd);
+```
+
+Closing a serial port will also usually set the DTR signal low which causes most MODEMs to hang up.
 
 
+---
+
+**Chapter 2, Configuring the Serial Port**
+
+This chapter discusses how to configure a serial port from C using the POSIX `termios` interface.
+
+**The POSIX Terminal Interface**
+
+Most systems support the POSIX terminal (serial) interface for changing parameters such as baud rate, character size, and so on. The first thing you need to do is include the file <termios.h>; this defines the terminal control structure as well as the POSIX control functions.
+
+The two most important POSIX functions are `tcgetattr(3)` and `tcsetattr(3)`. These get and set terminal attributes, respectively; you provide a pointer to a termios structure that contains all of the serial options available:
+
+[plot]
 
 
+---
 
+**Control Options**
+
+The `c_cflag` member controls the `baud rate`, `number of data bits`, `parity`, `stop bits`, and `hardware flow control`. There are constants for all of the supported configurations.
+
+[plot]
+
+The `c_cflag` member contains two options that should always be enabled, `CLOCAL` and `CREAD`. 
+These will ensure that your program does not become the 'owner' of the port subject to sporatic job control and hangup signals, and also that the serial interface driver will read incoming data bytes.
+
+
+The baud rate constants (CBAUD, B9600, etc.) are used for older interfaces that lack the c_ispeed and c_ospeed members. 
+See the next section for information on the POSIX functions used to set the baud rate.
+
+
+**Never** initialize the `c_cflag` (or any other flag) member directly; you should always use the bitwise AND, OR, and NOT operators to set or clear bits in the members. Different operating system versions (and even patches) can and do use the bits differently, so using the bitwise operators will prevent you from clobbering a bit flag that is needed in a newer serial driver.
+
+---
+
+**Setting the Baud Rate**
+
+The baud rate is stored in different places depending on the operating system. Older interfaces store the baud rate in the `c_cflag` member using one of the baud rate constants in table 4, while newer implementations provide the `c_ispeed` and `c_ospeed` members that contain the actual baud rate value.
+
+The `cfsetospeed(3)` and `cfsetispeed(3)` functions are provided to set the baud rate in the termios structure regardless of the underlying operating system interface. Typically you'd use the following code to set the baud rate:
+
+```
+struct termios options;
+
+/*
+ * Get the current options for the port...
+ */
+
+tcgetattr(fd, &options);
+
+/*
+ * Set the baud rates to 19200...
+ */
+
+cfsetispeed(&options, B19200);
+cfsetospeed(&options, B19200);
+
+/*
+ * Enable the receiver and set local mode...
+ */
+
+options.c_cflag |= (CLOCAL | CREAD);
+
+/*
+ * Set the new options for the port...
+ */
+
+tcsetattr(fd, TCSANOW, &options);
+```
+
+The `tcgetattr(3)` function fills the termios structure you provide with the current serial port configuration. After we set the baud rates and enable local mode and serial data receipt, we select the new configuration using tcsetattr(3). The `TCSANOW` constant specifies that all changes should occur immediately without waiting for output data to finish sending or input data to finish receiving. There are other constants to wait for input and output to finish or to flush the input and output buffers.
+
+Most systems do not support different input and output speeds, so be sure to set both to the same value for maximum portability.
+
+[plot]
+
+---
+
+**Setting the Character Size**
+
+Unlike the baud rate, there is no convienience function to set the character size. Instead you must do a little bitmasking to set things up. The character size is specified in bits:
+
+```
+options.c_cflag &= ~CSIZE; /* Mask the character size bits */
+options.c_cflag |= CS8;    /* Select 8 data bits */
+```
+
+
+---
+
+**Setting Parity Checking**
+
+Like the character size you must manually set the `parity enable` and `parity type bits`. UNIX serial drivers support `even`, `odd`, and `no parity bit` generation. Space parity can be simulated with clever coding.
+
+```
+No parity (8N1):
+options.c_cflag &= ~PARENB
+options.c_cflag &= ~CSTOPB
+options.c_cflag &= ~CSIZE;
+options.c_cflag |= CS8;
+```
+
+```
+Even parity (7E1):
+options.c_cflag |= PARENB
+options.c_cflag &= ~PARODD
+options.c_cflag &= ~CSTOPB
+options.c_cflag &= ~CSIZE;
+options.c_cflag |= CS7;
+```
+
+```
+Odd parity (7O1):
+options.c_cflag |= PARENB
+options.c_cflag |= PARODD
+options.c_cflag &= ~CSTOPB
+options.c_cflag &= ~CSIZE;
+options.c_cflag |= CS7;
+```
+
+```
+Space parity is setup the same as no parity (7S1):
+options.c_cflag &= ~PARENB
+options.c_cflag &= ~CSTOPB
+options.c_cflag &= ~CSIZE;
+options.c_cflag |= CS8;
+```
+
+---
+
+**Setting Hardware Flow Control**
+
+Some versions of UNIX support hardware flow control using the CTS (Clear To Send) and RTS (Request To Send) signal lines. 
+If the `CNEW_RTSCTS` or `CRTSCTS` constants are defined on your system then hardware flow control is probably supported. Do the following to enable hardware flow control:
+
+```
+options.c_cflag |= CNEW_RTSCTS;    /* Also called CRTSCTS */
+```
+
+Similarly, to disable hardware flow control:
+
+```
+options.c_cflag &= ~CNEW_RTSCTS;
+```
+
+---
+
+**Local Options**
+
+The local modes member **c_lflag** controls how input characters are managed by the serial driver. In general you will configure the `c_lflag` member for `canonical` or `raw input`.
+
+[plot]
+
+---
+
+**Choosing Canonical Input**
+
+Canonical input is line-oriented. Input characters are put into a buffer which can be edited interactively by the user until a CR (carriage return) or LF (line feed) character is received.
+
+When selecting this mode you normally select the `ICANON`, `ECHO`, and `ECHOE` options:
+
+```
+options.c_lflag |= (ICANON | ECHO | ECHOE);
+```
+
+---
+
+**Choosing Raw Input**
+
+Raw input is unprocessed. Input characters are passed through exactly as they are received, when they are received. Generally you'll deselect the `ICANON`, `ECHO`, `ECHOE`, and `ISIG` options when using raw input:
+
+```
+options.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG);
+```
+
+
+---
+
+**A Note About Input Echo**
+
+`Never` enable input echo (`ECHO`, `ECHOE`) when sending commands to a MODEM or other computer that is echoing characters, as you will generate a feedback loop between the two serial interfaces!
+
+---
+
+**Input Options**
+
+The input modes member `c_iflag` controls any input processing that is done to characters received on the port. Like the `c_cflag` field, the final value stored in `c_iflag` is the bitwise OR of the desired options.
+
+---
+
+**Setting Input Parity Options**
+
+You should enable `input parity checking` when you have enabled parity in the c_cflag member (PARENB). The revelant constants for input parity checking are `INPCK`, `IGNPAR`, `PARMRK` , and `ISTRIP`. Generally you will select `INPCK` and `ISTRIP` to enable checking and stripping of the parity bit:
+
+```
+options.c_iflag |= (INPCK | ISTRIP);
+```
+
+`IGNPAR` is a somewhat dangerous option that tells the serial driver to ignore parity errors and pass the incoming data through as if no errors had occurred. This can be useful for testing the quality of a communications link, but in general is not used for practical reasons.
+
+`PARMRK` causes parity errors to be 'marked' in the input stream using special characters. If `IGNPAR` is enabled, a NUL character (000 octal) is sent to your program before every character with a parity error. Otherwise, a DEL (177 octal) and NUL character is sent along with the bad character.
+
+
+---
+
+**Setting Software Flow Control**
+
+Software flow control is enabled using the `IXON`, `IXOFF` , and `IXANY` constants:
+
+```
+options.c_iflag |= (IXON | IXOFF | IXANY);
+```
+
+To disable software flow control simply mask those bits:
+
+```
+options.c_iflag &= ~(IXON | IXOFF | IXANY);
+```
+
+The XON (start data) and XOFF (stop data) characters are defined in the `c_cc` array described below.
+
+
+---
+
+**Output Options**
+
+The `c_oflag` member contains output filtering options. Like the input modes, you can select processed or raw data output.
+
+[plot]
+
+---
+
+**Choosing Processed Output**
+
+Processed output is selected by setting the `OPOST` option in the `c_oflag` member:
+
+```
+options.c_oflag |= OPOST;
+```
+
+Of all the different options, you will only probably use the `ONLCR` option which maps newlines into CR-LF pairs. 
+The rest of the output options are primarily historic and date back to the time when line printers and terminals could not keep up with the serial data stream!
+
+
+---
+
+**Choosing Raw Output**
+
+Raw output is selected by resetting the `OPOST` option in the `c_oflag` member:
+
+```
+options.c_oflag &= ~OPOST;
+```
+
+When the `OPOST` option is disabled, all other option bits in `c_oflag` are ignored.
+
+---
+
+**Control Characters**
+
+The `c_cc` character array contains control character definitions as well as timeout parameters. Constants are defined for every element of this array.
+
+[plot]
+
+
+---
+
+**Setting Software Flow Control Characters**
+
+The VSTART and VSTOP elements of the c_cc array contain the characters used for software flow control. Normally they should be set to DC1 (021 octal) and DC3 (023 octal) which represent the ASCII standard XON and XOFF characters.
+
+---
+
+**Setting Read Timeouts**
+
+UNIX serial interface drivers provide the ability to specify character and packet timeouts. Two elements of the c_cc array are used for timeouts: `VMIN` and `VTIME`. Timeouts are ignored in canonical input mode or when the NDELAY option is set on the file via open or fcntl.
+
+`VMIN specifies the minimum number of characters to read. If it is set to 0, then the VTIME value specifies the time to wait for every character read`. Note that this does not mean that a read call for N bytes will wait for N characters to come in. Rather, the timeout will apply to the first character and the read call will return the number of characters immediately available (up to the number you request).
+
+`If VMIN is non-zero, VTIME specifies the time to wait for the first character read.` If a character is read within the time given, any read will block (wait) until all VMIN characters are read. That is, once the first character is read, the serial interface driver expects to receive an entire packet of characters (VMIN bytes total). If no character is read within the time allowed, then the call to read returns 0. This method allows you to tell the serial driver you need exactly N bytes and any read call will return 0 or N bytes. However, the timeout only applies to the first character read, so if for some reason the driver misses one character inside the N byte packet then the read call could block forever waiting for additional input characters.
+
+VTIME specifies the amount of time to wait for incoming characters in tenths of seconds. If VTIME is set to 0 (the default), reads will block (wait) indefinitely unless the NDELAY option is set on the port with open or fcntl.
+
+---
+
+**Chapter 3, MODEM Communications**
+
+This chapter covers the basics of dialup telephone `Modulator/Demodulator (MODEM)` communications. Examples are provided for MODEMs that use the defacto standard "AT" command set.
+
+---
+
+**What Is a MODEM?**
+
+`MODEMs are devices that modulate serial data into frequencies that can be transferred over an analog data link such as a telephone line or cable TV connection.` A standard telephone MODEM converts serial data into tones that can be passed over the phone lines; because of the speed and complexity of the conversion these tones sound more like loud screeching if you listen to them.
+
+Telephone MODEMs are available today that can transfer data across a telephone line at nearly 53,000 bits per second, or 53kbps. In addition, most MODEMs use data compression technology that can increase the bit rate to well over 100kbps on some types of data.
+
+---
+
+**Communicating With a MODEM**
+
+The first step in communicating with a MODEM is to open and configure the port for `raw` input:
+
+Listing 3 - Configuring the port for raw input.
+```
+int            fd;
+struct termios options;
+
+/* open the port */
+fd = open("/dev/ttyf1", O_RDWR | O_NOCTTY | O_NDELAY);
+fcntl(fd, F_SETFL, 0);
+
+/* get the current options */
+tcgetattr(fd, &options);
+
+/* set raw input, 1 second timeout */
+options.c_cflag     |= (CLOCAL | CREAD);
+options.c_lflag     &= ~(ICANON | ECHO | ECHOE | ISIG);
+options.c_oflag     &= ~OPOST;
+options.c_cc[VMIN]  = 0;
+options.c_cc[VTIME] = 10;
+
+/* set the options */
+tcsetattr(fd, TCSANOW, &options);
+```
+
+Next you need to establish communications with the MODEM. The best way to do this is by sending the "AT" command to the MODEM. This also allows smart MODEMs to detect the baud you are using. When the MODEM is connected correctly and powered on it will respond with the response "OK".
+
+
+```
+Listing 4 - Initializing the MODEM.
+
+int                  /* O - 0 = MODEM ok, -1 = MODEM bad */
+init_modem(int fd)   /* I - Serial port file */
+{
+  char buffer[255];  /* Input buffer */
+  char *bufptr;      /* Current char in buffer */
+  int  nbytes;       /* Number of bytes read */
+  int  tries;        /* Number of tries so far */
+
+  for (tries = 0; tries < 3; tries ++)
+  {
+   /* send an AT command followed by a CR */
+    if (write(fd, "AT\r", 3) < 3)
+      continue;
+
+   /* read characters into our string buffer until we get a CR or NL */
+    bufptr = buffer;
+    while ((nbytes = read(fd, bufptr, buffer + sizeof(buffer) - bufptr - 1)) > 0)
+    {
+      bufptr += nbytes;
+      if (bufptr[-1] == '\n' || bufptr[-1] == '\r')
+        break;
+    }
+
+   /* nul terminate the string and see if we got an OK response */
+    *bufptr = '\0';
+
+    if (strncmp(buffer, "OK", 2) == 0)
+      return (0);
+  }
+
+  return (-1);
+}
+```
+
+
+**Standard MODEM Commands**
+
+Most MODEMs support the "AT" command set, so called because each command starts with the "AT" characters. Each command is sent with the "AT" characters starting in the first column followed by the specific command and a carriage return (CR, 015 octal). After processing the command the MODEM will reply with one of several textual messages depending on the command.
+
+---
+
+**ATD - Dial A Number**
+
+The ATD command dials the specified number. In addition to numbers and dashes you can specify tone ("T") or pulse ("P") dialing, pause for one second (","), and wait for a dialtone ("W"):
+
+```
+ATDT 555-1212
+ATDT 18008008008W1234,1,1234
+ATD T555-1212WP1234
+```
+
+The MODEM will reply with one of the following messages:
+
+```
+NO DIALTONE
+BUSY
+NO CARRIER
+CONNECT
+CONNECT baud
+```
+
+---
+
+**ATH - Hang Up**
+
+The ATH command causes the MODEM to hang up. Since the MODEM must be in "command" mode you probably won't use it during a normal phone call.
+
+Most MODEMs will also hang up if DTR is dropped; you can do this by setting the baud to 0 for at least 1 second. Dropping DTR also returns the MODEM to command mode.
+
+After a successful hang up the MODEM will reply with "NO CARRIER". If the MODEM is still connected the "CONNECT" or "CONNECT baud" message will be sent.
+
+
+---
+
+ATZ - Reset MODEM
+
+The ATZ command resets the MODEM. The MODEM will reply with the string "OK".
+
+
+---
+
+Common MODEM Communication Problems
+
+First and foremost, don't forget to disable input echoing. Input echoing will cause a feedback loop between the MODEM and computer.
+
+Second, when sending MODEM commands you must terminate them with a carriage return (CR) and not a newline (NL). The C character constant for CR is "\r".
+
+Finally, when dealing with a MODEM make sure you use a baud that the MODEM supports. While many MODEMs do auto-baud detection, some have limits (19.2kbps is common) that you must observe.
+
+---
+
+Chapter 4, Advanced Serial Programming
+
+> To be continue ...
 
 
 
