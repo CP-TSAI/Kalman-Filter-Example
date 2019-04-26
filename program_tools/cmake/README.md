@@ -240,6 +240,112 @@ int main() {
 }
 ```
 
+
+---
+
+<使用庫>
+
+當想要加入沒有 `main()`  的 cpp file 時，可以使用`庫`。
+
+ex: *libHelloSLAM.cpp*
+```c++
+#include <iostream>
+using namespace std;
+void printHello() {
+	cout << "Hello" << endl;
+}
+```
+
+可以使用 
+```
+add_library(hello libHelloSLAM.cpp)
+```
+
+如此就會生成一個 `libhello.a` 的文件。就是我們要的`庫`。
+
+在linux 中，`庫`分為兩種，
+
+- 靜態庫 (`.a`做為結尾)
+
+- 共享庫 (`.so`作為結尾)
+
+差別在於`靜態庫每次被調用都會生成一個副本，而共享庫則只有一個副本，更省空間`。
+
+如果想生成`共享庫`而非`靜態庫`，可以使用 
+```
+add_library(hello_shared SHARED libHelloSLAM.cpp)
+```
+
+就會生成 `libhello_shared.so`
+
+
+---
+
+要調用`庫`, 只要`頭文件` 及 `庫文件` 即可。
+
+ex: **頭文件** 
+```c++
+#ifndef LIBHELLOSLAM_H_
+#define LIBHELLOSLAM_H_
+
+void printHello();
+
+#endif
+```
+
+**庫文件**
+
+ex: *libHelloSLAM.cpp*
+```c++
+#include <iostream>
+using namespace std;
+void printHello() {
+	cout << "Hello" << endl;
+}
+```
+
+調用函式
+
+```c++
+#include "libHelloSLAM.h"
+
+// 使用 libHelloSLAM.h 中的 printHello() 函数
+int main( int argc, char** argv )
+{
+    printHello();
+    return 0;
+}
+```
+
+CMakeLists
+
+```
+# 声明要求的 cmake 最低版本
+cmake_minimum_required( VERSION 2.8 )
+
+# 声明一个 cmake 工程
+project( HelloSLAM )
+
+# 设置编译模式
+set( CMAKE_BUILD_TYPE "Debug" )
+
+# 添加一个可执行程序
+# 语法：add_executable( 程序名 源代码文件 ）
+add_executable( helloSLAM helloSLAM.cpp )
+
+# 添加一个库
+add_library( hello libHelloSLAM.cpp )
+# 共享库
+add_library( hello_shared SHARED libHelloSLAM.cpp )
+
+add_executable( useHello useHello.cpp )
+# 将库文件链接到可执行程序上
+target_link_libraries( useHello hello_shared )
+```
+
+
+
+
 ---
 
 <後記> 不用CMake, 直接用Makefile
