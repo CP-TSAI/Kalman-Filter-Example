@@ -35,6 +35,40 @@ TABLES:
 
 ---
 
+### Chapter 8 Basic object-oriented programming
+```
+8.1	Welcome to object-oriented programming
+8.2	Classes and class members
+8.3	Public vs private access specifiers
+8.4	Access functions and encapsulation
+8.5	Constructors
+8.5a Constructor member initializer lists
+8.5b Non-static member initialization
+8.6	Overlapping and delegating constructors
+8.7	Destructors
+8.8	The hidden “this” pointer
+8.9	Class code and header files
+8.10 Const class objects and member functions
+8.11 Static member variables
+8.12 Static member functions
+8.13 Friend functions and classes
+8.14 Anonymous objects
+8.15 Nested types in classes
+8.16 Timing your code
+8.x	Chapter 8 comprehensive quiz
+```
+
+
+--- 
+
+### Important Notes:
+
+- 
+
+
+
+
+
 
 
 
